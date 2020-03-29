@@ -27,5 +27,5 @@ class WishListBot(val token: String)
   onCommand("create") { implicit msg =>
     request(SendPoll(msg.chat.id, "Q1", Array("opt1", "opt2"))).void
   }
-  
+
 }
