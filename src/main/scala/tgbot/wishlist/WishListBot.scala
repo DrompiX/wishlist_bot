@@ -5,10 +5,10 @@ import akka.actor.typed.scaladsl.Behaviors
 import cats.instances.future._
 import cats.syntax.functor._
 import com.bot4s.telegram.api.{BotBase, RequestHandler}
-import com.bot4s.telegram.api.declarative.Commands
+import com.bot4s.telegram.api.declarative.{Args, Commands}
 import com.bot4s.telegram.clients.FutureSttpClient
 import com.bot4s.telegram.future.{Polling, TelegramBot}
-import com.bot4s.telegram.methods.SendMessage
+import com.bot4s.telegram.methods.{ParseMode, SendMessage}
 //import com.bot4s.telegram.methods.{SendMessage, SendPoll}
 import com.bot4s.telegram.models.{Message, Update, User}
 import com.softwaremill.sttp.SttpBackend
@@ -16,6 +16,8 @@ import slogging.{LogLevel, LoggerConfig, PrintLoggerFactory}
 //import akka.actor.{Actor, ActorRef, FSM, Props, Terminated}
 
 import scala.concurrent.Future
+
+import tgbot.wishlist.BotMessages._
 
 trait FSMState
 trait FSMData
@@ -86,7 +88,7 @@ trait ChatSplitter extends ActorBroker with Commands[Future] {
   object Worker {
     sealed trait State
 //    object Idle extends State
-    object Reset extends State
+//    case class Reset(msg: Message) extends State
     case class ProcessMessage(msg: Message) extends State
     case class AddName(name: String) extends State
     case class AddLink(link: String) extends State
@@ -100,12 +102,12 @@ trait ChatSplitter extends ActorBroker with Commands[Future] {
           for { com <- command(message) } yield {
             com.cmd match {
               case "add" =>
-                handleArguments(message) match {
+                handleArguments(message, commandArguments) match {
                   case Some(name) =>
-                    ctx.self ! AddName(name)
-                    addState()
+                    request(SendMessage(message.chat.id, linkRequired, Some(ParseMode.Markdown)))
+                    addWishLink(Wish(name))
                   case None =>
-                    request(SendMessage(message.chat.id, "Please, specify the name of an item after /add"))
+                    request(SendMessage(message.chat.id, nameRequired))
                     Behaviors.same
                 }
 
@@ -118,20 +120,45 @@ trait ChatSplitter extends ActorBroker with Commands[Future] {
       nextState.getOrElse(Behaviors.same)
     }
 
-    def addState(): Behavior[State] = Behaviors.receive { (ctx, msg) =>
-      val nextState: Option[Behavior[State]] = msg match {
-        case AddName(name) => ???
-        case ProcessMessage(message) => ???
-        case Reset => ???
+    def addWishLink(wish: Wish): Behavior[State] = Behaviors.receive { (ctx, msg) =>
+      msg match {
+        case ProcessMessage(message) => command(message) match {
+          case Some(_) => // item creation was interrupted by another command
+            request(SendMessage(message.chat.id, notFinishedWish))
+            ctx.self ! ProcessMessage(message)
+            idleState()
+          case None =>
+            request(SendMessage(message.chat.id, descRequired, Some(ParseMode.Markdown)))
+            val link = handleArguments(message, textTokens).getOrElse(wish.link)
+            addWishDescription(Wish(wish.name, link))
+        }
+
         case _ => ???
       }
-
-      nextState.getOrElse(Behaviors.same)
     }
 
-    def handleArguments(m: Message): Option[String] =
+    def addWishDescription(wish: Wish): Behavior[State] = Behaviors.receive { (ctx, msg) =>
+      msg match {
+        case ProcessMessage(message) => command(message) match {
+          case Some(_) => // item creation was interrupted by another command
+            request(SendMessage(message.chat.id, notFinishedWish))
+            ctx.self ! ProcessMessage(message)
+            idleState()
+          case None =>
+            request(SendMessage(message.chat.id, successfulCreation))
+            val desc = handleArguments(message, textTokens).getOrElse(wish.description)
+            val finalWish = Wish(wish.name, wish.link, desc)
+            println("Resulting wish:\n" + finalWish)
+            idleState()
+        }
+
+        case _ => ???
+      }
+    }
+
+    def handleArguments(m: Message, extractor: Message => Option[Args]): Option[String] =
       for {
-        args <- commandArguments(m)
+        args <- extractor(m)
         if args.nonEmpty
       } yield { args.mkString(" ") }
     ////        command(m) match {
