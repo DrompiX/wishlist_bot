@@ -1,19 +1,17 @@
 package tgbot.wishlist
 
-import akka.actor.typed.{ActorRef, ActorSystem, Behavior, Terminated}
-import akka.actor.typed.scaladsl.Behaviors
 import cats.instances.future._
 import cats.syntax.functor._
+import akka.actor.typed.{ActorRef, ActorSystem, Behavior}
+import akka.actor.typed.scaladsl.Behaviors
 import com.bot4s.telegram.api.{BotBase, RequestHandler}
 import com.bot4s.telegram.api.declarative.{Args, Commands}
 import com.bot4s.telegram.clients.FutureSttpClient
 import com.bot4s.telegram.future.{Polling, TelegramBot}
 import com.bot4s.telegram.methods.{ParseMode, SendMessage}
-//import com.bot4s.telegram.methods.{SendMessage, SendPoll}
 import com.bot4s.telegram.models.{Message, Update, User}
 import com.softwaremill.sttp.SttpBackend
 import slogging.{LogLevel, LoggerConfig, PrintLoggerFactory}
-//import akka.actor.{Actor, ActorRef, FSM, Props, Terminated}
 
 import scala.concurrent.Future
 
@@ -35,7 +33,11 @@ class WishListBot(val token: String)
   override val client: RequestHandler[Future] = new FutureSttpClient(token)
 
   onCommand('start) { implicit msg =>
-    reply("Greetings!\nTo add an item to the wishlist, please type /add").void
+    reply(greetingText).void
+  }
+
+  onCommand('help) { implicit msg =>
+    reply(helpText).void
   }
 
 }
@@ -65,7 +67,7 @@ trait ChatSplitter extends ActorBroker with Commands[Future] {
           user <- message.from
         } yield {
           user.id match {
-            case 198009316 =>
+            case 198009316 | 89127286 =>
               val id = message.chat.id
               val handler = sessions.getOrElse(id, {
                 val worker = ctx.spawn(Worker(), s"worker_$id")
@@ -75,6 +77,7 @@ trait ChatSplitter extends ActorBroker with Commands[Future] {
               handler ! Worker.ProcessMessage(message)
               processUpdates(sessions + (id -> handler))
             case _ =>
+              println("ID: " + user.id)
               request(SendMessage(message.chat.id, "Sorry, this bot is under development."))
               Behaviors.same
           }
@@ -84,11 +87,8 @@ trait ChatSplitter extends ActorBroker with Commands[Future] {
 
   }
 
-
   object Worker {
     sealed trait State
-//    object Idle extends State
-//    case class Reset(msg: Message) extends State
     case class ProcessMessage(msg: Message) extends State
     case class AddName(name: String) extends State
     case class AddLink(link: String) extends State
@@ -99,6 +99,7 @@ trait ChatSplitter extends ActorBroker with Commands[Future] {
     def idleState(): Behavior[State] = Behaviors.receive { (ctx, msg) =>
       val nextState: Option[Behavior[State]] = msg match {
         case ProcessMessage(message) =>
+          println("Worker: " + ctx.self)
           for { com <- command(message) } yield {
             com.cmd match {
               case "add" =>
@@ -161,20 +162,6 @@ trait ChatSplitter extends ActorBroker with Commands[Future] {
         args <- extractor(m)
         if args.nonEmpty
       } yield { args.mkString(" ") }
-    ////        command(m) match {
-    ////          case Some(com) => com.cmd match {
-    ////            case "add" =>
-    ////              handleAddition(m) match {
-    ////                case Some(name) =>
-    ////                  println("N: " + name)
-    ////                  self ! AddName(name)
-    ////                  addProcess()
-    ////                case None       =>
-    ////                  request(SendMessage(m.chat.id, "Please, specify the name of an item after /add"))
-    ////              }
-    ////
-    ////            case _ =>
-    ////          }
 
   }
 }

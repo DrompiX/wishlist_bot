@@ -6,4 +6,6 @@ object BotMessages {
   val descRequired = "Please, specify a description (optional) – type `No` if there is no description."
   val successfulCreation = "New wish was created!"
   val notFinishedWish = "Previous wish was not finished."
+  val greetingText = "Greetings!\nTo add an item to the wishlist, please type /add"
+  val helpText = "help message" // TODO
 }
