@@ -13,12 +13,11 @@ import com.bot4s.telegram.models.{Message, Update, User}
 import com.softwaremill.sttp.SttpBackend
 import slogging.{LogLevel, LoggerConfig, PrintLoggerFactory}
 
-import scala.concurrent.Future
+import scala.util.Try
+import scala.concurrent.{ExecutionContext, Future}
 
 import tgbot.wishlist.BotMessages._
 
-trait FSMState
-trait FSMData
 
 class WishListBot(val token: String)
     extends TelegramBot
@@ -32,12 +31,74 @@ class WishListBot(val token: String)
   implicit val backend: SttpBackend[Future, Nothing] = SttpBackends.default
   override val client: RequestHandler[Future] = new FutureSttpClient(token)
 
-  onCommand('start) { implicit msg =>
-    reply(greetingText).void
+  private def getIndexedWishes(implicit msg: Message): Future[List[(Int, UserWishesRow)]] = {
+    msg.from match {
+      case Some(user) =>
+        DBManager.getUserWishes(user.id).map { wishes => List.range(1, wishes.length + 1).zip(wishes)}
+      case _ =>
+        Future.successful(List.empty[(Int, UserWishesRow)])
+    }
   }
 
-  onCommand('help) { implicit msg =>
-    reply(helpText).void
+  onCommand('start) { implicit msg => reply(greetingText).void }
+
+  onCommand('help) { implicit msg => reply(helpText).void }
+
+  onCommand('list) { implicit msg =>
+    withArgs { args =>
+      for {
+        wishes <- getIndexedWishes
+      } yield {
+        val itemCnt = args match { case Seq(Int(n)) if n > 0 => n; case _ => wishes.length }
+        val wishesPretty = wishes.take(itemCnt).map { case (id, wish) =>
+          s"🏷 $id. " + Wish('`' + wish.wishName + '`', wish.wishLink, wish.wishDesc)
+        }
+        val sep = List.fill(25)("–").mkString
+        replyMd(wishesPretty.mkString(s"\n$sep\n")).void
+      }
+    }
+  }
+  //      msg.from match {
+  //        case Some(user) =>
+  //          val wishesFut = DBManager.getUserWishes(user.id)
+  //          for {
+  //            wishes <- wishesFut
+  //          } yield {
+  //            val itemCnt = args match { case Seq(Int(n)) if n > 0 => n; case _ => wishes.length }
+  //            val indexedWishes = List.range(1, itemCnt + 1).zip(wishes)
+  //            val wishesPretty = indexedWishes.map {
+  //              id2wish =>
+  //                val (id, wish) = id2wish
+  //                s"🏷 $id. " + Wish('`' + wish.wishName + '`', wish.wishLink, wish.wishDesc)
+  //            }
+  //            val sep = List.fill(25)("–").mkString
+  //            replyMd(wishesPretty.mkString(s"\n$sep\n")).void
+  //          }
+  //        case None => reply("You have no wishes yet! Type /add <wish_name> to create new one.").void
+  //      }
+
+  onCommand('delete) { implicit msg =>
+    withArgs {
+      case Seq(Int(n)) =>
+        for {
+          wishes <- getIndexedWishes
+        } yield {
+          if (n - 1 >= 0 && n - 1 < wishes.length)
+            msg.from match {
+              case Some(user) =>
+                DBManager.deleteWish(user.id, wishes(n)._2)//.map { wishes => List.range(1, wishes.length + 1).zip(wishes)}
+              case _ =>
+                Future.successful(List.empty[(Int, UserWishesRow)])
+            }
+//            DBManager.deleteWish()
+            wishes(n)
+        }
+      case _ => ???
+    }
+  }
+
+  object Int {
+    def unapply(s: String): Option[Int] = Try(s.toInt).toOption
   }
 
 }
@@ -54,6 +115,7 @@ trait ActorBroker extends BotBase[Future] {
 trait ChatSplitter extends ActorBroker with Commands[Future] {
   type Sessions = Map[Long, ActorRef[Worker.State]]
 
+  private implicit val ec: ExecutionContext = ExecutionContext.global
   implicit val system: ActorSystem[Update] = ActorSystem(ChatBroker(), "broker")
   override val broker: Option[ActorRef[Update]] = Some(system)
 
@@ -112,6 +174,14 @@ trait ChatSplitter extends ActorBroker with Commands[Future] {
                     Behaviors.same
                 }
 
+//              case "delete" =>
+//                handleArguments(message, commandArguments) match {
+//                  case Some(id) => ???
+//                  case None =>
+//                    request(SendMessage(message.chat.id, nameRequired))
+//                    Behaviors.same
+//                }
+
               case _ => Behaviors.same
             }
           }
@@ -130,7 +200,7 @@ trait ChatSplitter extends ActorBroker with Commands[Future] {
             idleState()
           case None =>
             request(SendMessage(message.chat.id, descRequired, Some(ParseMode.Markdown)))
-            val link = handleArguments(message, textTokens).getOrElse(wish.link)
+            val link = handleArguments(message, textTokens)
             addWishDescription(Wish(wish.name, link))
         }
 
@@ -146,10 +216,25 @@ trait ChatSplitter extends ActorBroker with Commands[Future] {
             ctx.self ! ProcessMessage(message)
             idleState()
           case None =>
-            request(SendMessage(message.chat.id, successfulCreation))
-            val desc = handleArguments(message, textTokens).getOrElse(wish.description)
+            val desc = handleArguments(message, textTokens)
             val finalWish = Wish(wish.name, wish.link, desc)
             println("Resulting wish:\n" + finalWish)
+            val addFut = message.from match {
+              case Some(user) => DBManager.insertWish(user.id, finalWish)
+              case _ => Future.successful(None)
+            }
+            addFut.map {
+              case Some(1) => request(SendMessage(message.chat.id, successfulCreation))
+              case _       => request(SendMessage(message.chat.id, failedCreation))
+            }
+//            val isSuccessful = for { add <- addFut } yield { if (add.contains(1)) true else false }
+//            isSuccessful.map {
+//              case true  =>
+//              case false => request(SendMessage(message.chat.id, failedCreation))
+//            }
+
+
+//            DBManager.insertWish(message.from.)
             idleState()
         }
 
@@ -165,110 +250,3 @@ trait ChatSplitter extends ActorBroker with Commands[Future] {
 
   }
 }
-
-//trait PerChatRequests
-//    extends ActorBroker
-//    with Commands[Future]
-//    with AkkaDefaults {
-//
-//  override val broker: Option[ActorRef] = Some(
-//    system.actorOf(Props(new Broker), "broker")
-//  )
-//
-//  class Broker extends Actor {
-//    val chatActors: mutable.Map[Long, ActorRef] = collection.mutable.Map[Long, ActorRef]()
-//
-//    def receive: Receive = {
-//      case u: Update =>
-////        println("U: " + u)
-//        u.message.foreach { m =>
-////          for (user <- m.from)
-////            user.id match {
-////              case 198009315 =>
-////              case _         =>
-////            }
-//
-//          m.from match {
-//            case Some(u: User) => u.id match {
-//              case 198009316 =>
-//                val id = m.chat.id
-//                val handler = chatActors.getOrElseUpdate(m.chat.id, {
-//                  val worker = system.actorOf(Props(new Worker), s"worker_$id")
-//                  context.watch(worker)
-//                  worker
-//                })
-//                handler ! m
-//              case _ =>
-//                request(SendMessage(m.chat.id, "Sorry, this bot is under development."))
-//            }
-//          }
-//        }
-//
-//      case Terminated(worker) =>
-//        chatActors.find(_._2 == worker).foreach {
-//          case (k, _) => chatActors.remove(k)
-//        }
-//
-//      case _ =>
-//    }
-//  }
-//
-//  // For every chat a new worker actor will be spawned.
-//  // All requests will be routed through this worker actor; allowing to maintain a per-chat state.
-//  class Worker {
-////    import Worker._
-////
-////    def receive: Receive = {
-////      case m: Message =>
-////        println(m.text)
-////        command(m) match {
-////          case Some(com) => com.cmd match {
-////            case "add" =>
-////              handleAddition(m) match {
-////                case Some(name) =>
-////                  println("N: " + name)
-////                  self ! AddName(name)
-////                  addProcess()
-////                case None       =>
-////                  request(SendMessage(m.chat.id, "Please, specify the name of an item after /add"))
-////              }
-////
-////            case _ =>
-////          }
-////        }
-////
-////      case _ =>
-////    }
-//
-//  }
-//
-//  object Worker {
-//    def addProcess(): Behavior[State] = Behaviors.receive { (ctx, msg) =>
-//      msg match {
-//        case AddName(name) =>
-//          println("here: " + name)
-//          Behaviors.same
-//        case _ => Behaviors.same
-//      }
-//    }
-//
-//    def handleAddition(m: Message): Option[String] =
-//      for {
-//        args <- commandArguments(m)
-//        if args.nonEmpty
-//      } yield { args.mkString(" ") }
-//  }
-//
-////  sealed trait BotCommand
-////  object Start extends BotCommand
-////  object Help extends BotCommand
-////  object Add extends BotCommand
-////  object Delete extends BotCommand
-//
-//  sealed trait State
-//  object Idle extends State
-//  object Reset extends State
-//  case class AddName(name: String) extends State
-//  case class AddLink(link: String) extends State
-//  case class AddDescription(desc: String) extends State
-//}

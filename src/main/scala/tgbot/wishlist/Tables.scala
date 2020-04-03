@@ -7,7 +7,8 @@ case class UserWishesRow(id: Option[Int] = None,
                          userId: Int,
                          wishName: String,
                          wishLink: Option[String] = None,
-                         wishDesc: Option[String] = None)
+                         wishDesc: Option[String] = None) {
+}
 
 class UserWishes(tag: Tag) extends Table[UserWishesRow](tag, Some("my_schema"), "user_wishes") {
   val id = column[Int]("id", O.AutoInc, O.PrimaryKey)

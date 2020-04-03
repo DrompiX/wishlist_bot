@@ -5,7 +5,9 @@ object BotMessages {
   val linkRequired = "Please, specify a link (optional) – type `No` if there is no link."
   val descRequired = "Please, specify a description (optional) – type `No` if there is no description."
   val successfulCreation = "New wish was created!"
+  val failedCreation = "Something went wrong, your wish was not added. Please, try again."
   val notFinishedWish = "Previous wish was not finished."
   val greetingText = "Greetings!\nTo add an item to the wishlist, please type /add"
   val helpText = "help message" // TODO
+  val idRequired = "Please, specify an id of the item to delete."
 }
