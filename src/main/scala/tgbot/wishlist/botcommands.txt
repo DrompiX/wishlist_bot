@@ -1,1 +1,5 @@
-help - Wishlist app.
+start - simple greeting
+help - info about commands
+list - print full wishlist (/list 5 to print 5 wishes)
+add - new wish (e.g. /add iPhone)
+delete - delete wish (e.g. /delete 2)

@@ -13,9 +13,6 @@ libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-protobuf" % "2.6.4",
   "com.typesafe.akka" %% "akka-stream" % "2.6.4",
   "com.typesafe.slick" %% "slick" % "3.3.1",
-//  "org.slf4j" % "slf4j-nop" % "1.7.26",
-//  "com.typesafe.slick" %% "slick-hikaricp" % "3.3.1",
-//  "org.postgresql" % "postgresql" % "9.4-1200-jdbc41"
   "com.typesafe.slick" %% "slick-hikaricp" % "3.3.1",
   "org.postgresql" % "postgresql" % "42.2.5",
   "com.typesafe.slick" %% "slick-codegen" % "3.3.1"

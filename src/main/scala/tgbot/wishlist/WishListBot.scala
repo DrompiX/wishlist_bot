@@ -5,17 +5,16 @@ import cats.syntax.functor._
 import akka.actor.typed.{ActorRef, ActorSystem, Behavior}
 import akka.actor.typed.scaladsl.Behaviors
 import com.bot4s.telegram.api.{BotBase, RequestHandler}
-import com.bot4s.telegram.api.declarative.{Args, Commands}
+import com.bot4s.telegram.api.declarative.{Args, Commands, InlineQueries, whenOrElse}
 import com.bot4s.telegram.clients.FutureSttpClient
 import com.bot4s.telegram.future.{Polling, TelegramBot}
 import com.bot4s.telegram.methods.{ParseMode, SendMessage}
-import com.bot4s.telegram.models.{Message, Update, User}
+import com.bot4s.telegram.models.{InlineQuery, InlineQueryResultArticle, InputTextMessageContent, Message, Update, User}
 import com.softwaremill.sttp.SttpBackend
 import slogging.{LogLevel, LoggerConfig, PrintLoggerFactory}
 
 import scala.util.Try
 import scala.concurrent.{ExecutionContext, Future}
-
 import tgbot.wishlist.BotMessages._
 
 
@@ -23,6 +22,7 @@ class WishListBot(val token: String)
     extends TelegramBot
     with Polling
     with Commands[Future]
+    with InlineQueries[Future]
     with ChatSplitter {
 
   LoggerConfig.factory = PrintLoggerFactory()
@@ -31,13 +31,20 @@ class WishListBot(val token: String)
   implicit val backend: SttpBackend[Future, Nothing] = SttpBackends.default
   override val client: RequestHandler[Future] = new FutureSttpClient(token)
 
-  private def getIndexedWishes(implicit msg: Message): Future[List[(Int, UserWishesRow)]] = {
-    msg.from match {
+  private def getIndexedWishes(userOpt: Option[User]): Future[List[(Int, UserWishesRow)]] =
+    userOpt match {
       case Some(user) =>
         DBManager.getUserWishes(user.id).map { wishes => List.range(1, wishes.length + 1).zip(wishes)}
       case _ =>
         Future.successful(List.empty[(Int, UserWishesRow)])
     }
+
+  private def getPrintableWishes(wishes: List[(Int, UserWishesRow)]): String = {
+    val wishesPretty = wishes.map { case (id, wish) =>
+      s"🏷 $id. " + Wish('`' + wish.wishName + '`', wish.wishLink, wish.wishDesc)
+    }
+    val sep = List.fill(25)("–").mkString
+    wishesPretty.mkString(s"\n$sep\n")
   }
 
   onCommand('start) { implicit msg => reply(greetingText).void }
@@ -47,54 +54,50 @@ class WishListBot(val token: String)
   onCommand('list) { implicit msg =>
     withArgs { args =>
       for {
-        wishes <- getIndexedWishes
+        wishes <- getIndexedWishes(msg.from)
       } yield {
         val itemCnt = args match { case Seq(Int(n)) if n > 0 => n; case _ => wishes.length }
-        val wishesPretty = wishes.take(itemCnt).map { case (id, wish) =>
-          s"🏷 $id. " + Wish('`' + wish.wishName + '`', wish.wishLink, wish.wishDesc)
-        }
-        val sep = List.fill(25)("–").mkString
-        replyMd(wishesPretty.mkString(s"\n$sep\n")).void
+        replyMd(getPrintableWishes(wishes.take(itemCnt)))
       }
     }
   }
-  //      msg.from match {
-  //        case Some(user) =>
-  //          val wishesFut = DBManager.getUserWishes(user.id)
-  //          for {
-  //            wishes <- wishesFut
-  //          } yield {
-  //            val itemCnt = args match { case Seq(Int(n)) if n > 0 => n; case _ => wishes.length }
-  //            val indexedWishes = List.range(1, itemCnt + 1).zip(wishes)
-  //            val wishesPretty = indexedWishes.map {
-  //              id2wish =>
-  //                val (id, wish) = id2wish
-  //                s"🏷 $id. " + Wish('`' + wish.wishName + '`', wish.wishLink, wish.wishDesc)
-  //            }
-  //            val sep = List.fill(25)("–").mkString
-  //            replyMd(wishesPretty.mkString(s"\n$sep\n")).void
-  //          }
-  //        case None => reply("You have no wishes yet! Type /add <wish_name> to create new one.").void
-  //      }
 
   onCommand('delete) { implicit msg =>
     withArgs {
       case Seq(Int(n)) =>
+        val normN = n - 1
         for {
-          wishes <- getIndexedWishes
+          wishes <- getIndexedWishes(msg.from)
         } yield {
-          if (n - 1 >= 0 && n - 1 < wishes.length)
-            msg.from match {
-              case Some(user) =>
-                DBManager.deleteWish(user.id, wishes(n)._2)//.map { wishes => List.range(1, wishes.length + 1).zip(wishes)}
-              case _ =>
-                Future.successful(List.empty[(Int, UserWishesRow)])
+          if (normN >= 0 && normN < wishes.length)
+            DBManager.deleteWish(wishes(normN)._2.id.getOrElse(-1)).map {
+              case 1 => reply(successfulRemoval)
+              case _ => reply(failedRemoval)
             }
-//            DBManager.deleteWish()
-            wishes(n)
+          else
+            reply(incorrectId(1, wishes.length))
         }
-      case _ => ???
+      case _ => reply(idRequired).void
     }
+  }
+
+  def nonEmptyQuery(iq: InlineQuery): Boolean = iq.query.nonEmpty
+
+  whenOrElse(onInlineQuery, nonEmptyQuery) { implicit inQuery =>
+    inQuery.query match {
+      case "share" =>
+        for {
+          wishes <- getIndexedWishes(Some(inQuery.from))
+        } yield {
+          val prettyWishes = InputTextMessageContent(getPrintableWishes(wishes))
+          val result = InlineQueryResultArticle(id = "1", title = "Wishlist", prettyWishes)
+          answerInlineQuery(Seq(result))
+        }
+
+      case _ => answerInlineQuery(Seq()).void
+    }
+  } /* empty query */ {
+    answerInlineQuery(Seq())(_).void
   }
 
   object Int {
@@ -174,14 +177,6 @@ trait ChatSplitter extends ActorBroker with Commands[Future] {
                     Behaviors.same
                 }
 
-//              case "delete" =>
-//                handleArguments(message, commandArguments) match {
-//                  case Some(id) => ???
-//                  case None =>
-//                    request(SendMessage(message.chat.id, nameRequired))
-//                    Behaviors.same
-//                }
-
               case _ => Behaviors.same
             }
           }
@@ -227,14 +222,6 @@ trait ChatSplitter extends ActorBroker with Commands[Future] {
               case Some(1) => request(SendMessage(message.chat.id, successfulCreation))
               case _       => request(SendMessage(message.chat.id, failedCreation))
             }
-//            val isSuccessful = for { add <- addFut } yield { if (add.contains(1)) true else false }
-//            isSuccessful.map {
-//              case true  =>
-//              case false => request(SendMessage(message.chat.id, failedCreation))
-//            }
-
-
-//            DBManager.insertWish(message.from.)
             idleState()
         }
 

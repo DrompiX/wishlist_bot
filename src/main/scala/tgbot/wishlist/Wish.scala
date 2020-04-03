@@ -11,5 +11,3 @@ case class Wish(name: String, link: Option[String] = None, description: Option[S
 object Wish {
   val emptyWish: Wish = Wish("")
 }
-
-case class WishList(wishList: List[Wish])

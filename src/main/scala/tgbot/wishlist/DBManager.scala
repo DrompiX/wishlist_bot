@@ -20,7 +20,8 @@ object DBManager {
     db.run(insertQuery)
   }
 
-  def deleteWish(userId: Int, wishRow: UserWishesRow) = {
-    ???
+  def deleteWish(rowId: Int): Future[Int] = {
+    val deleteQuery = wishes.filter(_.id === rowId).delete
+    db.run(deleteQuery)
   }
 }
