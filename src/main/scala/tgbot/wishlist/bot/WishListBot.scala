@@ -163,7 +163,7 @@ trait ChatSplitter extends ActorBroker with Commands[Future] {
 
     def apply(chatId: Long): Behavior[State] = idleState(chatId)
 
-    def idleState(chatId: Long): Behavior[State] = Behaviors.receive { (ctx, msg) =>
+    def idleState(chatId: Long): Behavior[State] = Behaviors.receive { (_, msg) =>
       val nextState: Option[Behavior[State]] = msg match {
         case ProcessMessage(message) =>
           for {
@@ -246,7 +246,7 @@ trait ChatSplitter extends ActorBroker with Commands[Future] {
         }
       }
 
-    def saveWish(chatId: Long, wish: Wish): Behavior[State] = Behaviors.receive { (ctx, msg) =>
+    def saveWish(chatId: Long, wish: Wish): Behavior[State] = Behaviors.receive { (_, msg) =>
       msg match {
         case SaveWish(userOpt) =>
           userOpt match {
