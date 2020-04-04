@@ -1,14 +1,16 @@
-package tgbot.wishlist
+package tgbot.wishlist.bot
 
 object BotMessages {
   val nameRequired = "Please, specify the name of an item after /add command, e.x /add new AirPods."
-  val linkRequired = "Please, specify a link (optional) – type `No` if there is no link."
-  val descRequired = "Please, specify a description (optional) – type `No` if there is no description."
+  val linkRequired = "Please, specify a link (optional)"
+  val descRequired = "Please, specify a description (optional)"
   val successfulCreation = "New wish was created!"
   val failedCreation = "Something went wrong, your wish was not added. Please, try again."
   val successfulRemoval = "Specified wish was successfully removed!"
   val failedRemoval = "Wish removal was unsuccessful."
   val notFinishedWish = "Previous wish was not finished."
+  val emptyList = "Your wishlist is currently empty. To add a new wish use /add (e.g. /add AirPods)"
+
   val greetingText: String =
     """Greetings! I can help you to manage your wishlist \uD83D\uDE0A.
       |To see available commands, consider using /help.""".stripMargin

@@ -1,4 +1,4 @@
-package tgbot.wishlist
+package tgbot.wishlist.db
 
 import slick.jdbc.PostgresProfile.api._
 import slick.lifted.ProvenShape

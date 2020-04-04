@@ -1,4 +1,4 @@
-package tgbot.wishlist
+package tgbot.wishlist.bot
 
 case class Wish(name: String, link: Option[String] = None, description: Option[String] = None) {
   override def toString: String = {

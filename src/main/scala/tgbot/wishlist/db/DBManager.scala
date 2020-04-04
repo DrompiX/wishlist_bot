@@ -1,8 +1,8 @@
-package tgbot.wishlist
+package tgbot.wishlist.db
 
-import scala.concurrent.{Await, Future}
-import scala.concurrent.duration._
+import scala.concurrent.Future
 import slick.jdbc.PostgresProfile.api._
+import tgbot.wishlist.bot.Wish
 
 import scala.concurrent.ExecutionContext.Implicits.global
 
@@ -15,7 +15,6 @@ object DBManager {
 
   def insertWish(userId: Int, wish: Wish): Future[Option[Int]] = {
     val Wish(name, link, description) = wish
-    // TODO: think about removing Options
     val insertQuery = wishes ++= Seq(UserWishesRow(None, userId, name, link, description))
     db.run(insertQuery)
   }
@@ -25,3 +24,4 @@ object DBManager {
     db.run(deleteQuery)
   }
 }
+
