@@ -11,12 +11,12 @@ import com.bot4s.telegram.future.{Polling, TelegramBot}
 import com.bot4s.telegram.methods.{EditMessageText, ParseMode, SendMessage}
 import com.bot4s.telegram.models._
 import com.softwaremill.sttp.SttpBackend
-import slogging.{LogLevel, LoggerConfig, PrintLoggerFactory}
+import slogging.{LogLevel, LoggerConfig, PrintLoggerFactory, StrictLogging}
 import tgbot.wishlist.bot.BotMessages._
 import tgbot.wishlist.db.{DBManager, UserWishesRow}
 
 import scala.concurrent.{ExecutionContext, Future}
-import scala.util.{Success, Try}
+import scala.util.{Failure, Success, Try}
 
 
 class WishListBot(val token: String)
@@ -63,7 +63,7 @@ class WishListBot(val token: String)
         wishes.length match {
           case n if n > 0 => replyMd(getPrintableWishes(wishes.take(itemCnt)))
           case 0 => reply(emptyList)
-          case _ => println("Should never happen")
+          case _ => logger.error("Returned length of wishes from db is negative.")
         }
       }
     }
@@ -111,7 +111,7 @@ class WishListBot(val token: String)
 
 }
 
-trait ChatSplitter extends ActorBroker with Commands[Future] {
+trait ChatSplitter extends ActorBroker with Commands[Future] with StrictLogging {
   type Sessions = Map[Long, ActorRef[Worker.State]]
 
   private implicit val ec: ExecutionContext = ExecutionContext.global
@@ -265,7 +265,7 @@ trait ChatSplitter extends ActorBroker with Commands[Future] {
     def removeMarkup(msgFut: Future[Message]): Unit = {
       msgFut.onComplete {
         case Success(msg) => request(getSkippedMessageEdit(msg, ""))
-        case _ => ??? // TODO: add logging
+        case Failure(exception) => logger.error(s"Future failed with exception $exception")
       }
     }
 
