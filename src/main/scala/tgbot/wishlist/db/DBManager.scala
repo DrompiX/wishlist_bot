@@ -1,20 +1,16 @@
 package tgbot.wishlist.db
 
-import java.io.File
-
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.Future
 import slick.jdbc.PostgresProfile.api._
-import com.typesafe.config.{Config, ConfigFactory}
-
-
 import tgbot.wishlist.bot.Wish
 
+import scala.concurrent.ExecutionContext.Implicits.global
 
-class DBManager(db: Database) { //(implicit ec: ExecutionContext) {
+class DBManager(db: Database) {
   val wishes = TableQuery[UserWishes]
 
   def getUserWishes(userId: Int): Future[Seq[UserWishesRow]] =
-    db.run(wishes.result)//.map(_.filter(_.userId == userId).sortBy(_.id))
+    db.run(wishes.result).map(_.filter(_.userId == userId).sortBy(_.id))
 
   def insertWish(userId: Int, wish: Wish): Future[Option[Int]] = {
     val Wish(name, link, description) = wish
@@ -26,6 +22,4 @@ class DBManager(db: Database) { //(implicit ec: ExecutionContext) {
     val deleteQuery = wishes.filter(_.id === rowId).delete
     db.run(deleteQuery)
   }
-
-  val close: Unit = db.close()
 }

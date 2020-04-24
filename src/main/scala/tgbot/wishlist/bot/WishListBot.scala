@@ -1,6 +1,5 @@
 package tgbot.wishlist.bot
 
-import akka.actor.typed.{ActorRef, ActorSystem, DispatcherSelector}
 import cats.instances.future._
 import cats.syntax.functor._
 import com.bot4s.telegram.api.RequestHandler
@@ -14,34 +13,23 @@ import com.softwaremill.sttp.akkahttp.AkkaHttpBackend
 import slogging.{LogLevel, LoggerConfig, PrintLoggerFactory}
 import tgbot.wishlist.bot.BotMessages._
 import tgbot.wishlist.db.{DBManager, UserWishesRow}
-import slick.jdbc.PostgresProfile.api.Database
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.Future
 import scala.util.Try
 
 
-class WishListBot(val token: String, db: Database)(override implicit val executionContext: ExecutionContext)
-    extends CustomBot
+class WishListBot(val token: String, dbManager: DBManager)
+    extends TelegramBot
     with Polling
     with Commands[Future]
     with InlineQueries[Future]
     with ChatSplitter {
-
-  val dbManager = new DBManager(db)
 
   LoggerConfig.factory = PrintLoggerFactory()
   LoggerConfig.level = LogLevel.TRACE
 
   override val workerActor: BaseWorker = new Worker(dbManager, this)
   override val brokerActor: UpdateBroker = ChatBroker(workerActor)
-
-  override implicit val system: ActorSystem[Update] = ActorSystem(brokerActor(), "broker")
-  override val broker: Option[ActorRef[Update]] = Some(system)
-
-//  override implicit val executionContext: ExecutionContext = scala.concurrent.ExecutionContext.global //system.dispatchers.lookup(DispatcherSelector.default())
-
-  println("HERE!")
-  println(executionContext)
 
   implicit val backend: SttpBackend[Future, Nothing] = AkkaHttpBackend()
   override val client: RequestHandler[Future] = new FutureSttpClient(token)

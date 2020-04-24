@@ -8,15 +8,15 @@ import slogging.StrictLogging
 import scala.concurrent.Future
 
 trait ChatSplitter
-  extends ActorBroker
+    extends ActorBroker
     with Commands[Future]
     with StrictLogging {
 
   val workerActor: BaseWorker
   val brokerActor: UpdateBroker
 
-  implicit val system: ActorSystem[Update]// = ActorSystem(brokerActor(), "broker")
-  override val broker: Option[ActorRef[Update]]// = Some(system)
+  implicit lazy val system: ActorSystem[Update] = ActorSystem(brokerActor(), "broker")
+  lazy val broker: Option[ActorRef[Update]] = Some(system)
 }
 
 trait UpdateBroker {
