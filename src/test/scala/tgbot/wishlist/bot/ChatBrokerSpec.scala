@@ -1,7 +1,7 @@
 package tgbot.wishlist.bot
 
 import akka.actor.testkit.typed.Effect.Spawned
-import akka.actor.testkit.typed.scaladsl.{ActorTestKit, BehaviorTestKit}
+import akka.actor.testkit.typed.scaladsl.{ActorTestKit, BehaviorTestKit, TestInbox}
 import akka.actor.typed.DispatcherSelector
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.AnyFlatSpec
@@ -9,8 +9,8 @@ import org.scalatest.matchers.should.Matchers
 import com.bot4s.telegram.models.{CallbackQuery, Chat, ChatType, Message, Update, User}
 import com.typesafe.config.{Config, ConfigFactory}
 import slick.jdbc.PostgresProfile.api.Database
-import scala.concurrent.ExecutionContext
 
+import scala.concurrent.ExecutionContext
 import tgbot.wishlist.db.DBManager
 
 
@@ -48,33 +48,34 @@ class ChatBrokerSpec extends AnyFlatSpec with Matchers {
     }
   }
 
-}
-
-class ChatBrokerAsyncSpec extends AnyFlatSpec with BeforeAndAfterAll with Matchers {
-  import ChatBrokerSpec._
-
-  val kit: ActorTestKit = ActorTestKit()
-  override def afterAll(): Unit = kit.shutdownTestKit()
-  implicit val ec: ExecutionContext = kit.system.dispatchers.lookup(DispatcherSelector.default())
-
-  it should "send messages to correct worker" in {
-    val workerProbe1 = kit.createTestProbe[BaseWorker.State]()
-    val workerProbe2 = kit.createTestProbe[BaseWorker.State]()
+  it should "not spawn new worker for known chat" in {
     val worker = new Worker(dbManager, bot)
-    val broker = kit.spawn(ChatBroker(worker).processUpdates(Map(0L -> workerProbe1.ref, 1L -> workerProbe2.ref)))
-    broker ! testUpdateWithMessage
+    val workerInbox = TestInbox[BaseWorker.State]()
+    val broker = BehaviorTestKit(ChatBroker(worker).processUpdates(Map(0L -> workerInbox.ref)))
+    broker.run(testUpdateWithMessage)
 
-    workerProbe1.receiveMessage()
-    workerProbe2.expectNoMessage()
+    broker.hasEffects() shouldBe false
+    workerInbox.receiveMessage()
   }
 
-  it should "send correct messages to worker" in {
-    val workerProbe = kit.createTestProbe[BaseWorker.State]()
+  it should "send messages to correct worker" in {
+    val workerProbe1 = TestInbox[BaseWorker.State]()
+    val workerProbe2 = TestInbox[BaseWorker.State]()
     val worker = new Worker(dbManager, bot)
-    val broker = kit.spawn(ChatBroker(worker).processUpdates(Map(0L -> workerProbe.ref)))
-    broker ! testUpdateWithMessage
-    broker ! testUpdateWithCallback
-    val Seq(message1, message2) = workerProbe.receiveMessages(2)
+    val broker = BehaviorTestKit(ChatBroker(worker).processUpdates(Map(0L -> workerProbe1.ref, 1L -> workerProbe2.ref)))
+    broker.run(testUpdateWithMessage)
+
+    workerProbe1.receiveMessage()
+    workerProbe2.hasMessages shouldBe false
+  }
+
+  it should "send correct types of messages to worker" in {
+    val workerProbe = TestInbox[BaseWorker.State]()
+    val worker = new Worker(dbManager, bot)
+    val broker = BehaviorTestKit(ChatBroker(worker).processUpdates(Map(0L -> workerProbe.ref)))
+    broker.run(testUpdateWithMessage)
+    broker.run(testUpdateWithCallback)
+    val Seq(message1, message2) = workerProbe.receiveAll()
     message1 match {
       case BaseWorker.ProcessMessage(msg) =>
         msg.chat.id shouldBe 0
