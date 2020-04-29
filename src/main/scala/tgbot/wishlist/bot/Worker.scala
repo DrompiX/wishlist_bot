@@ -116,7 +116,8 @@ class Worker(dbManager: DBManager, commands: Commands[Future])
         userOpt match {
           case Some(user) => dbManager.insertWish(user.id, wish).flatMap {
             case Some(1) => request(SendMessage(chatId, successfulCreation))
-            case _       => request(SendMessage(chatId, failedCreation))
+            case Some(0) => request(SendMessage(chatId, failedCreation))
+            case _       => Future.successful(logger.error(s"More than one row was affected for user ${user.id}"))
           }
           case _ => Future.successful(None)
         }
