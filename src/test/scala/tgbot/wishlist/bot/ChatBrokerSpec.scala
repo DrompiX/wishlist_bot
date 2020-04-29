@@ -3,25 +3,20 @@ package tgbot.wishlist.bot
 import akka.actor.testkit.typed.Effect.Spawned
 import akka.actor.testkit.typed.scaladsl.{ActorTestKit, BehaviorTestKit}
 import akka.actor.typed.DispatcherSelector
-import cats.MonadError
-import com.bot4s.telegram.api.RequestHandler
-import com.bot4s.telegram.api.declarative.Commands
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import com.bot4s.telegram.models.{CallbackQuery, Chat, ChatType, Message, Update, User}
 import com.typesafe.config.{Config, ConfigFactory}
 import slick.jdbc.PostgresProfile.api.Database
-import tgbot.wishlist.db.DBManager
-import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.ExecutionContext
 
-import scala.concurrent.{ExecutionContextExecutor, Future}
+import tgbot.wishlist.db.DBManager
+
 
 class ChatBrokerSpec extends AnyFlatSpec with Matchers {
   import ChatBrokerSpec._
-
-//  val kit: ActorTestKit = ActorTestKit()
-//  implicit val ec: ExecutionContextExecutor = kit.system.dispatchers.lookup(DispatcherSelector.default())
+  import scala.concurrent.ExecutionContext.Implicits.global
 
   it should "handle updates correctly" in {
     val broker: ChatBroker = ChatBroker(bot.workerActor)
@@ -44,17 +39,62 @@ class ChatBrokerSpec extends AnyFlatSpec with Matchers {
     val worker = new Worker(dbManager, bot)
     val broker = BehaviorTestKit(ChatBroker(worker)())
     broker.run(testUpdateWithMessage)
-    broker.expectEffect(Spawned(worker(0), "worker_0"))
+    val effect = broker.retrieveEffect()
+    effect match {
+      case Spawned(_, name, _) =>
+        name shouldBe s"worker_${testUpdateWithMessage.message.get.chat.id}"
+      case _ =>
+        fail("Incorrect effect received, expected spawned worker.")
+    }
   }
 
-  //    val broker = kit.spawn(ChatBroker(worker)())
-  //    broker ! testUpdateWithMessage
+}
+
+class ChatBrokerAsyncSpec extends AnyFlatSpec with BeforeAndAfterAll with Matchers {
+  import ChatBrokerSpec._
+
+  val kit: ActorTestKit = ActorTestKit()
+  override def afterAll(): Unit = kit.shutdownTestKit()
+  implicit val ec: ExecutionContext = kit.system.dispatchers.lookup(DispatcherSelector.default())
+
+  it should "send messages to correct worker" in {
+    val workerProbe1 = kit.createTestProbe[BaseWorker.State]()
+    val workerProbe2 = kit.createTestProbe[BaseWorker.State]()
+    val worker = new Worker(dbManager, bot)
+    val broker = kit.spawn(ChatBroker(worker).processUpdates(Map(0L -> workerProbe1.ref, 1L -> workerProbe2.ref)))
+    broker ! testUpdateWithMessage
+
+    workerProbe1.receiveMessage()
+    workerProbe2.expectNoMessage()
+  }
+
+  it should "send correct messages to worker" in {
+    val workerProbe = kit.createTestProbe[BaseWorker.State]()
+    val worker = new Worker(dbManager, bot)
+    val broker = kit.spawn(ChatBroker(worker).processUpdates(Map(0L -> workerProbe.ref)))
+    broker ! testUpdateWithMessage
+    broker ! testUpdateWithCallback
+    val Seq(message1, message2) = workerProbe.receiveMessages(2)
+    message1 match {
+      case BaseWorker.ProcessMessage(msg) =>
+        msg.chat.id shouldBe 0
+        msg.text.getOrElse(":)") shouldBe "hello"
+      case _ => fail(s"Incorrect message type.")
+    }
+    message2 match {
+      case BaseWorker.ProcessCallback(msg, cb) =>
+        msg.chat.id shouldBe 0
+        msg.text.getOrElse(":)") shouldBe "hello"
+        cb.from.firstName shouldBe "Dima"
+      case _ => fail(s"Incorrect message type.")
+    }
+  }
 
 }
 
 object ChatBrokerSpec {
   val testUser: User = User(0, isBot = false, firstName = "Dima")
-  val testMessage: Message = Message(messageId = 0, date = 0, chat = Chat(0, ChatType.Private))
+  val testMessage: Message = Message(messageId = 0, date = 0, chat = Chat(0, ChatType.Private), text = Some("hello"))
   val testCallback: CallbackQuery = CallbackQuery(id = "id", from = testUser,
                                                   chatInstance = "inst", message = Some(testMessage))
   val testUpdateWithMessage: Update = Update(0, message = Some(testMessage))
