@@ -10,6 +10,7 @@ object BotMessages {
   val failedRemoval = "Wish removal was unsuccessful."
   val notFinishedWish = "Previous wish was not finished."
   val emptyList = "Your wishlist is currently empty. To add a new wish use /add (e.g. /add AirPods)"
+  val unknownCommand = "Sorry, I can't understand your message. Use /help to find examples."
 
   val greetingText: String =
     """Greetings! I can help you to manage your wishlist \uD83D\uDE0A.

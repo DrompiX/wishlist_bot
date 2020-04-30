@@ -1,16 +1,13 @@
 package tgbot.wishlist.bot
 
 import akka.actor.testkit.typed.Effect.Spawned
-import akka.actor.testkit.typed.scaladsl.{ActorTestKit, BehaviorTestKit, TestInbox}
-import akka.actor.typed.DispatcherSelector
-import org.scalatest.BeforeAndAfterAll
+import akka.actor.testkit.typed.scaladsl.{BehaviorTestKit, TestInbox}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import com.bot4s.telegram.models.{CallbackQuery, Chat, ChatType, Message, Update, User}
 import com.typesafe.config.{Config, ConfigFactory}
 import slick.jdbc.PostgresProfile.api.Database
 
-import scala.concurrent.ExecutionContext
 import tgbot.wishlist.db.DBManager
 
 
