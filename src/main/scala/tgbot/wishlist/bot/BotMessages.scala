@@ -34,5 +34,5 @@ object BotMessages {
     """Please, specify an index of the item after /delete
       |command (/delete <id> - you can find it using /list command).""".stripMargin
 
-  def incorrectId(hi: Int, low: Int) = s"Item index is incorrect, should be in range [$hi; $low]."
+  def incorrectId(low: Int, hi: Int) = s"Item index is incorrect, should be in range [$low; $hi]."
 }

@@ -19,5 +19,10 @@ libraryDependencies ++= Seq(
   "com.typesafe.slick" %% "slick-hikaricp" % "3.3.1",
   "org.postgresql" % "postgresql" % "42.2.5",
   "com.typesafe.slick" %% "slick-codegen" % "3.3.1",
-  "com.softwaremill.sttp" %% "akka-http-backend" % "1.7.2"
+  "com.softwaremill.sttp" %% "akka-http-backend" % "1.7.2",
+  "org.mockito" %% "mockito-scala" % "1.13.11" % Test
+//  "org.mockito" %% "mockito-scala" % "1.14.0",
+//  "org.mockito" %% "mockito-scala_scalatest" % "1.14.0" % Test
+//  "org.mockito:mockito-scala_2.12.7:1.14.0",
+//  "org.mockito:mockito-scala-scalatest_2.12.7:1.14.0"
 )

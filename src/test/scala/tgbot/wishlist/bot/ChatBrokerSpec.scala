@@ -5,8 +5,8 @@ import akka.actor.testkit.typed.scaladsl.{BehaviorTestKit, TestInbox}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import com.bot4s.telegram.models.{CallbackQuery, Chat, ChatType, Message, Update, User}
-import com.typesafe.config.{Config, ConfigFactory}
 import slick.jdbc.PostgresProfile.api.Database
+import org.mockito.MockitoSugar
 
 import tgbot.wishlist.db.DBManager
 
@@ -90,15 +90,14 @@ class ChatBrokerSpec extends AnyFlatSpec with Matchers {
 
 }
 
-object ChatBrokerSpec {
+object ChatBrokerSpec extends MockitoSugar {
   val testUser: User = User(0, isBot = false, firstName = "Dima")
   val testMessage: Message = Message(messageId = 0, date = 0, chat = Chat(0, ChatType.Private), text = Some("hello"))
   val testCallback: CallbackQuery = CallbackQuery(id = "id", from = testUser,
                                                   chatInstance = "inst", message = Some(testMessage))
   val testUpdateWithMessage: Update = Update(0, message = Some(testMessage))
   val testUpdateWithCallback: Update = Update(0, callbackQuery = Some(testCallback))
-  val config: Config = ConfigFactory.load()
-  val db = Database.forConfig("testDB", config); db.close
+  val db = mock[Database]
   val dbManager = new DBManager(db)
   val bot = new WishListBot("", dbManager)
 }

@@ -12,15 +12,19 @@ import tgbot.wishlist.db.DBManager
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success}
 
-class Worker(dbManager: DBManager, commands: Commands[Future])
-            (implicit ec: ExecutionContext) extends BaseWorker with StrictLogging {
+object Worker {
   import BaseWorker._
-  import commands._
-
   case class AddName(name: String) extends State
   case class AddLink(link: String) extends State
   case class AddDescription(desc: String) extends State
   case class SaveWish(userOpt: Option[User]) extends State
+}
+
+class Worker(dbManager: DBManager, commands: Commands[Future])
+            (implicit ec: ExecutionContext) extends BaseWorker with StrictLogging {
+  import BaseWorker._
+  import Worker._
+  import commands._
 
   val skipButton: InlineKeyboardButton = InlineKeyboardButton("Skip", callbackData = Some("skip"))
   val skipKeyboard: Option[InlineKeyboardMarkup] = Some(InlineKeyboardMarkup.singleColumn(Seq(skipButton)))

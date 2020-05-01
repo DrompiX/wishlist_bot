@@ -3,7 +3,7 @@ package tgbot.wishlist.bot
 import cats.instances.future._
 import cats.syntax.functor._
 import com.bot4s.telegram.api.RequestHandler
-import com.bot4s.telegram.api.declarative.{Commands, InlineQueries, RegexCommands, whenOrElse}
+import com.bot4s.telegram.api.declarative.{Commands, InlineQueries, whenOrElse}
 import com.bot4s.telegram.clients.FutureSttpClient
 import com.bot4s.telegram.future.{Polling, TelegramBot}
 import com.bot4s.telegram.methods.ParseMode
@@ -23,7 +23,6 @@ class WishListBot(val token: String, dbManager: DBManager)
     with Polling
     with Commands[Future]
     with InlineQueries[Future]
-    with RegexCommands[Future]
     with ChatSplitter {
 
   LoggerConfig.factory = PrintLoggerFactory()
@@ -107,8 +106,6 @@ class WishListBot(val token: String, dbManager: DBManager)
   } /* empty query */ {
     answerInlineQuery(Seq())(_).void
   }
-
-  onRegex(".*".r) { implicit msg => _ => reply(unknownCommand).void }
 
   object Int {
     def unapply(s: String): Option[Int] = Try(s.toInt).toOption
